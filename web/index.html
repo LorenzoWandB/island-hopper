@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Island Hopper</title>
+<style>
+  :root {
+    --bg: #eef4f8; --panel: #ffffff; --ink: #1d2b36; --muted: #6b7a86; --line: #dfe7ee;
+    --accent: #2f9e44; --accent-ink: #ffffff; --danger: #e03131; --gem: #3bc9db; --code: #f6f8fa;
+    --hl: #fff3bf; --agent: #7048e8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
+  body { display: grid; grid-template-columns: 380px 1fr; gap: 16px; padding: 16px; height: 100vh; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .left { padding: 16px; gap: 12px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
+  .tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; padding: 3px 8px; border-radius: 999px; background: var(--code); color: var(--muted); }
+  .tag.agent { background: #efe8ff; color: var(--agent); cursor: pointer; }
+  .tag.manual { background: #e6f7ea; color: var(--accent); }
+  select, button { font: inherit; }
+  select { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  .thought { font-size: 13px; color: var(--ink); background: #f3f0ff; border-left: 3px solid var(--agent); padding: 8px 10px; border-radius: 8px; min-height: 36px; white-space: pre-wrap; }
+  .thought:empty { display: none; }
+  .code { background: var(--code); border: 1px solid var(--line); border-radius: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; overflow: auto; flex: 1; min-height: 140px; padding: 8px 0; }
+  .line { display: grid; grid-template-columns: 34px 1fr 90px; padding: 3px 12px 3px 0; color: var(--ink); }
+  .line .n { text-align: right; color: var(--muted); padding-right: 10px; user-select: none; }
+  .line .o { font-size: 11px; text-align: right; color: var(--muted); align-self: center; }
+  .line.cur { background: var(--hl); }
+  .line.bad { background: #ffe3e3; }
+  .line.good { color: var(--accent); }
+  .cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cmds button { padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  .cmds button:hover { border-color: #b7c4cf; }
+  .cmds button.warn { color: var(--danger); border-color: #ffc9c9; }
+  .run { width: 100%; padding: 12px; border-radius: 999px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 15px; cursor: pointer; }
+  .run:disabled { opacity: .5; cursor: default; }
+  .run.ai { background: var(--agent); }
+  .banner { font-size: 13px; padding: 10px 12px; border-radius: 10px; background: var(--code); color: var(--ink); white-space: pre-wrap; }
+  .banner.win { background: #e6f7ea; color: #1b6b2b; }
+  .banner.fail { background: #ffe3e3; color: #9d1c1c; }
+  .banner:empty { display: none; }
+  .right { position: relative; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .hud { position: absolute; top: 14px; left: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill { background: rgba(255,255,255,.92); border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 15px; box-shadow: 0 2px 8px rgba(0,0,0,.08); display: flex; align-items: center; gap: 8px; }
+  .pill .gem { width: 12px; height: 12px; background: var(--gem); transform: rotate(45deg); border-radius: 2px; display: inline-block; }
+  .pill.small { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .speed { position: absolute; bottom: 14px; right: 14px; background: rgba(255,255,255,.92); border-radius: 999px; padding: 8px 14px; font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .toast { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); background: rgba(255,255,255,.95); padding: 12px 20px; border-radius: 999px; font-weight: 700; font-size: 18px; box-shadow: 0 6px 24px rgba(0,0,0,.12); opacity: 0; transition: opacity .25s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .ws { position: absolute; top: 14px; right: 14px; font-size: 11px; color: var(--muted); background: rgba(255,255,255,.9); border-radius: 999px; padding: 6px 10px; }
+  .ws b { color: var(--accent); }
+  .ws.off b { color: var(--danger); }
+  @media (max-width: 900px) { body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; } .right { min-height: 50vh; } }
+</style>
+</head>
+<body>
+  <section class="panel left">
+    <div class="row" style="justify-content: space-between;">
+      <h1>Island Hopper</h1>
+      <span id="source" class="tag manual">manual</span>
+    </div>
+    <div class="row">
+      <label for="level" style="font-size:12px;color:var(--muted)">Level</label>
+      <select id="level"></select>
+      <span id="levelName" style="font-size:13px;color:var(--muted)"></span>
+    </div>
+    <div id="thought" class="thought"></div>
+    <div id="code" class="code"></div>
+    <div class="cmds">
+      <button data-c="move_forward">move_forward()</button>
+      <button data-c="collect_gem">collect_gem()</button>
+      <button data-c="turn_left">turn_left()</button>
+      <button data-c="turn_right">turn_right()</button>
+      <button data-c="toggle_switch">toggle_switch()</button>
+      <button id="undo">⌫ undo</button>
+      <button id="clear" class="warn" style="grid-column: 1 / -1">✕ clear</button>
+    </div>
+    <button id="run" class="run">▶ Run My Code</button>
+    <div class="row" style="gap:8px">
+      <select id="aiModel" style="flex:1; min-width: 0"></select>
+      <button id="aiPlay" class="run ai" style="width:auto; padding: 10px 14px">🤖 Let the AI play</button>
+    </div>
+    <div id="banner" class="banner"></div>
+  </section>
+
+  <section class="panel right">
+    <canvas id="c"></canvas>
+    <div class="hud">
+      <div class="pill"><span class="gem"></span><span id="gems">0 / 0</span></div>
+      <div class="pill small" id="score">score 0</div>
+      <div class="pill small" id="attempt">attempt 1</div>
+    </div>
+    <div class="ws" id="ws"><b>●</b> renderer</div>
+    <div class="speed">speed <input id="speed" type="range" min="0.25" max="4" step="0.25" value="1" /><span id="speedv">1×</span></div>
+    <div class="toast" id="toast"></div>
+  </section>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ---------- state ----------
+const $ = (id) => document.getElementById(id);
+let level = null;            // current level dict
+let program = [];            // commands shown in the code pane
+let manual = true;           // false while an agent is driving
+let animating = false;
+let speed = 1;
+const queue = [];            // pending events to animate in order
+
+// ---------- three.js scene ----------
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xcfe9f7);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x9ec4d8, 0.9);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(6, 12, 4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -12; sun.shadow.camera.right = 12; sun.shadow.camera.top = 12; sun.shadow.camera.bottom = -12;
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+// water
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(200, 200),
+  new THREE.MeshStandardMaterial({ color: 0x5aa2bd, roughness: 0.8, metalness: 0.05 })
+);
+water.rotation.x = -Math.PI / 2; water.position.y = -0.75; water.receiveShadow = true;
+scene.add(water);
+
+const world = new THREE.Group();   // everything that belongs to the current level
+scene.add(world);
+
+// materials
+const grass = new THREE.MeshStandardMaterial({ color: 0x7ec35a, roughness: 0.9 });
+const grassDark = new THREE.MeshStandardMaterial({ color: 0x6fb04f, roughness: 0.9 });
+const dirt = new THREE.MeshStandardMaterial({ color: 0x8a5a3a, roughness: 1 });
+const dirtDark = new THREE.MeshStandardMaterial({ color: 0x6f4429, roughness: 1 });
+const gemMat = new THREE.MeshStandardMaterial({ color: 0x5be1f0, emissive: 0x1aa8c2, emissiveIntensity: 0.6, roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.95 });
+const portalMat = new THREE.MeshStandardMaterial({ color: 0xffe066, emissive: 0xffd43b, emissiveIntensity: 0.8, roughness: 0.4 });
+const bridgeDown = new THREE.MeshStandardMaterial({ color: 0x9fd3e6, roughness: 0.9, transparent: true, opacity: 0.35 });
+const switchOff = new THREE.MeshStandardMaterial({ color: 0xe03131, roughness: 0.5 });
+const switchOn = new THREE.MeshStandardMaterial({ color: 0x40c057, roughness: 0.5 });
+const blobMat = new THREE.MeshStandardMaterial({ color: 0x78b83e, roughness: 0.7 });
+const leafMat = new THREE.MeshStandardMaterial({ color: 0x9be36a, roughness: 0.8 });
+const white = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+const black = new THREE.MeshStandardMaterial({ color: 0x1b1b1b, roughness: 0.4 });
+
+const tileGeo = new THREE.BoxGeometry(1, 0.7, 1);
+const tileMats = [dirt, dirt, grass, dirtDark, dirt, dirt];
+const tileMatsAlt = [dirt, dirt, grassDark, dirtDark, dirt, dirt];
+
+let tiles = new Map();     // "x,y" -> mesh
+let bridges = new Map();   // "x,y" -> { mesh, switchIndex }
+let switches = [];         // { mesh, on }
+let gems = new Map();      // "x,y" -> mesh
+let portal = null;
+let blob = null;
+
+const key = (p) => `${p[0]},${p[1]}`;
+const w = (x, y, h = 0) => new THREE.Vector3(x, h, y);   // grid -> world
+const yawFor = { S: 0, E: Math.PI / 2, N: Math.PI, W: -Math.PI / 2 };
+
+function makeBlob() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 32, 24), blobMat);
+  body.position.y = 0.36; body.castShadow = true; body.scale.y = 0.92;
+  g.add(body);
+  for (const sx of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12), white);
+    eye.position.set(sx * 0.12, 0.42, 0.26);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.04, 12, 8), black);
+    pupil.position.set(sx * 0.12, 0.43, 0.32);
+    g.add(eye, pupil);
+  }
+  const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.22, 8), leafMat);
+  leaf.position.set(0.02, 0.76, -0.02); leaf.rotation.z = -0.5;
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.12), leafMat);
+  stem.position.set(0, 0.68, 0);
+  g.add(leaf, stem);
+  for (const [fx, fz] of [[-0.16, 0.16], [0.16, 0.16], [-0.16, -0.16], [0.16, -0.16]]) {
+    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 8), blobMat);
+    foot.position.set(fx, 0.06, fz); foot.castShadow = true;
+    g.add(foot);
+  }
+  return g;
+}
+
+function buildLevel(lv) {
+  world.clear();
+  tiles = new Map(); bridges = new Map(); switches = []; gems = new Map(); portal = null;
+  for (const t of lv.tiles) {
+    const m = new THREE.Mesh(tileGeo, ((t[0] + t[1]) % 2) ? tileMatsAlt : tileMats);
+    m.position.copy(w(t[0], t[1], -0.35)); m.castShadow = true; m.receiveShadow = true;
+    world.add(m); tiles.set(key(t), m);
+  }
+  lv.switches.forEach((sw, i) => {
+    for (const b of sw.bridge) {
+      const m = new THREE.Mesh(tileGeo, bridgeDown);
+      m.position.copy(w(b[0], b[1], -1.2));
+      world.add(m); bridges.set(key(b), { mesh: m, switchIndex: i });
+    }
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.08, 20), dirtDark);
+    base.position.copy(w(sw.pos[0], sw.pos[1], 0.04));
+    const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.1, 20), switchOff);
+    btn.position.copy(w(sw.pos[0], sw.pos[1], 0.12)); btn.castShadow = true;
+    world.add(base, btn); switches.push({ mesh: btn, on: false });
+  });
+  for (const g of lv.gems) {
+    const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.22), gemMat);
+    m.position.copy(w(g[0], g[1], 0.55)); m.castShadow = true;
+    m.userData.phase = Math.random() * Math.PI * 2;
+    world.add(m); gems.set(key(g), m);
+  }
+  portal = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.06, 16, 48), portalMat);
+  portal.rotation.x = Math.PI / 2; portal.position.copy(w(lv.goal[0], lv.goal[1], 0.05));
+  world.add(portal);
+  blob = makeBlob();
+  blob.position.copy(w(lv.start[0], lv.start[1], 0));
+  blob.rotation.y = yawFor[lv.facing];
+  blob.visible = true; blob.scale.setScalar(1);
+  world.add(blob);
+  frameCamera(lv);
+}
+
+function frameCamera(lv) {
+  const pts = [...lv.tiles, lv.start, lv.goal, ...lv.switches.flatMap(s => s.bridge)];
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...ys) + Math.max(...ys)) / 2;
+  const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) + 3;
+  const d = span * 1.35 + 2;
+  camera.position.set(cx + d * 0.62, d * 0.78, cz + d * 0.62);
+  camera.lookAt(cx, -0.2, cz);
+  sun.target.position.set(cx, 0, cz); sun.target.updateMatrixWorld();
+}
+
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+resize();
+
+let t0 = performance.now();
+function loop(now) {
+  const t = (now - t0) / 1000;
+  for (const m of gems.values()) { m.rotation.y = t * 1.6 + m.userData.phase; m.position.y = 0.55 + Math.sin(t * 2 + m.userData.phase) * 0.06; }
+  if (portal) { const s = 1 + Math.sin(t * 3) * 0.06; portal.scale.set(s, s, 1); portalMat.emissiveIntensity = 0.6 + Math.sin(t * 3) * 0.3; }
+  if (blob && blob.visible && !animating) blob.position.y = Math.sin(t * 4) * 0.015;
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ---------- tweens ----------
+const sleep = (ms) => new Promise(r => setTimeout(r, ms / speed));
+function tween(ms, fn) {
+  return new Promise(resolve => {
+    const start = performance.now(), dur = ms / speed;
+    const tick = (now) => {
+      const k = Math.min(1, (now - start) / dur);
+      fn(k <= 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2, k);
+      if (k < 1) requestAnimationFrame(tick); else resolve();
+    };
+    requestAnimationFrame(tick);
+  });
+}
+function shortestYaw(from, to) { let d = to - from; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return from + d; }
+
+async function moveTo(p, hop = true) {
+  const from = blob.position.clone(), to = w(p[0], p[1], 0);
+  await tween(360, (e, k) => { blob.position.lerpVectors(from, to, e); if (hop) blob.position.y = Math.sin(k * Math.PI) * 0.22; });
+  blob.position.y = 0;
+}
+async function turnTo(facing) {
+  const from = blob.rotation.y, to = shortestYaw(from, yawFor[facing]);
+  await tween(240, (e) => { blob.rotation.y = from + (to - from) * e; });
+  blob.rotation.y = yawFor[facing];
+}
+async function fall(p) {
+  const from = blob.position.clone(), to = w(p[0], p[1], 0);
+  await tween(300, (e) => blob.position.lerpVectors(from, to, e));
+  await tween(420, (e) => { blob.position.y = -e * e * 1.6; blob.rotation.x = e * 0.8; });
+  splash(to);
+  await tween(250, (e) => blob.scale.setScalar(1 - e));
+  blob.visible = false; blob.rotation.x = 0;
+}
+function splash(at) {
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.1, 0.16, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2; ring.position.set(at.x, -0.72, at.z); world.add(ring);
+  tween(600, (e) => { ring.scale.setScalar(1 + e * 5); ring.material.opacity = 0.9 * (1 - e); }).then(() => world.remove(ring));
+}
+async function collectAt(p) {
+  const g = gems.get(key(p)); if (!g) return;
+  await tween(320, (e) => { g.position.y = 0.55 + e * 1.2; g.scale.setScalar(1 - e); g.rotation.y += 0.3; });
+  world.remove(g); gems.delete(key(p));
+}
+async function toggle(states) {
+  const jobs = [];
+  states.forEach((on, i) => {
+    const sw = switches[i]; if (!sw || sw.on === on) return;
+    sw.on = on; sw.mesh.material = on ? switchOn : switchOff;
+    for (const b of bridges.values()) if (b.switchIndex === i) {
+      const m = b.mesh, from = m.position.y, to = on ? -0.35 : -1.2;
+      jobs.push(tween(450, (e) => { m.position.y = from + (to - from) * e; }).then(() => { m.material = on ? tileMats : bridgeDown; }));
+    }
+  });
+  await Promise.all(jobs);
+}
+async function enterPortal() {
+  await tween(500, (e) => { blob.rotation.y += 0.35; blob.scale.setScalar(1 - e); blob.position.y = e * 0.5; });
+  blob.visible = false;
+}
+async function shake() {
+  const x = blob.position.x;
+  await tween(220, (e, k) => { blob.position.x = x + Math.sin(k * Math.PI * 4) * 0.06; });
+  blob.position.x = x;
+}
+
+// ---------- UI ----------
+function renderProgram(cur = -1, marks = {}) {
+  const el = $('code'); el.innerHTML = '';
+  if (!program.length) { el.innerHTML = '<div class="line"><span class="n">1</span><span style="color:var(--muted)">// tap commands below, or let the agent write them</span></div>'; return; }
+  program.forEach((c, i) => {
+    const d = document.createElement('div');
+    d.className = 'line' + (i === cur ? ' cur' : '') + (marks[i] === 'bad' ? ' bad' : '') + (marks[i] === 'good' ? ' good' : '');
+    d.innerHTML = `<span class="n">${i + 1}</span><span>${c}()</span><span class="o">${marks[i] && marks[i] !== 'bad' && marks[i] !== 'good' ? marks[i] : ''}</span>`;
+    el.appendChild(d);
+  });
+  const c = el.querySelector('.cur'); if (c) c.scrollIntoView({ block: 'nearest' });
+}
+function setSource(src) {
+  manual = src !== 'agent';
+  const tag = $('source'); tag.textContent = manual ? 'manual' : 'agent'; tag.className = 'tag ' + (manual ? 'manual' : 'agent');
+  document.querySelectorAll('.cmds button, #run').forEach(b => b.disabled = !manual);
+  $('aiPlay').disabled = animating;
+  tag.title = manual ? '' : 'click to take manual control';
+}
+function toast(msg, ms = 1800) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), ms / speed); }
+function setBanner(text, cls = '') { const b = $('banner'); b.textContent = text; b.className = 'banner ' + cls; }
+function hud(gemsGot, gemsTotal, score, attempt) {
+  $('gems').textContent = `${gemsGot} / ${gemsTotal}`; $('score').textContent = `score ${score}`; $('attempt').textContent = `attempt ${attempt}`;
+}
+
+function loadLevel(lv, attempt = 1) {
+  level = lv; buildLevel(lv);
+  $('levelName').textContent = lv.name;
+  if ($('level').value !== lv.id && [...$('level').options].some(o => o.value === lv.id)) $('level').value = lv.id;
+  hud(0, lv.gems.length, 0, attempt);
+  setBanner('');
+}
+
+async function playRun(result) {
+  animating = true;
+  let got = 0, score = 0;
+  const marks = {};
+  blob.visible = true; blob.scale.setScalar(1);
+  for (const s of result.steps) {
+    renderProgram(s.index, marks);
+    switch (s.outcome) {
+      case 'moved': await moveTo(s.pos); break;
+      case 'turned': await turnTo(s.facing); break;
+      case 'collected': await collectAt(s.pos); got++; marks[s.index] = 'good'; break;
+      case 'toggled': await toggle(s.switches_on); break;
+      case 'wasted': await shake(); marks[s.index] = s.note; break;
+      case 'fell': await fall(s.pos); marks[s.index] = 'bad'; break;
+      case 'goal': await moveTo(s.pos); await enterPortal(); marks[s.index] = 'good'; break;
+    }
+    hud(got, result.gems_total, score += -2 + (s.outcome === 'collected' ? 20 : 0) + (s.outcome === 'fell' ? -30 : 0) + (s.outcome === 'wasted' ? -3 : 0) + (s.outcome === 'goal' ? 50 : 0), result.attempt);
+    await sleep(60);
+  }
+  renderProgram(-1, marks);
+  hud(result.gems_collected, result.gems_total, result.score, result.attempt);
+  if (result.status === 'goal') { toast(result.gems_collected === result.gems_total ? '✨ Perfect!' : '🌀 Portal reached'); setBanner(`${result.message}\nScore ${result.score} in ${result.commands_used} commands.`, 'win'); }
+  else if (result.status === 'fell') { toast('💦 Splash!'); setBanner(result.message, 'fail'); }
+  else if (result.status === 'invalid') { setBanner(result.message, 'fail'); }
+  else { toast('…not quite'); setBanner(result.message, 'fail'); }
+  animating = false;
+}
+
+// event queue: animate in order, never overlap
+async function pump() {
+  if (animating || !queue.length) return;
+  const ev = queue.shift();
+  if (ev.type === 'level') { setSource(ev.source || 'manual'); loadLevel(ev.level, ev.attempt || 1); if (ev.source === 'agent') { program = []; renderProgram(); $('thought').textContent = ''; } }
+  else if (ev.type === 'program') { program = ev.commands.slice(); renderProgram(); $('thought').textContent = ev.thought || ''; }
+  else if (ev.type === 'run') { if (!level || level.id !== ev.result.level_id) { /* level event should have preceded; ignore */ } else { animating = true; await playRun(ev.result); } }
+  else if (ev.type === 'toast') toast(ev.text, ev.ms || 2500);
+  else if (ev.type === 'reset') { if (level) loadLevel(level, 1); program = []; renderProgram(); }
+  pump();
+}
+
+// websocket to renderer server
+function connect() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => $('ws').classList.remove('off');
+  ws.onmessage = (m) => { queue.push(JSON.parse(m.data)); pump(); };
+  ws.onclose = () => { $('ws').classList.add('off'); setTimeout(connect, 1500); };
+  setInterval(() => { if (ws.readyState === 1) ws.send('ping'); }, 15000);
+}
+connect();
+
+// manual controls
+document.querySelectorAll('.cmds button[data-c]').forEach(b => b.onclick = () => { if (!manual) return; if (level && program.length >= level.max_commands) { toast(`max ${level.max_commands} commands`); return; } program.push(b.dataset.c); renderProgram(); });
+$('undo').onclick = () => { program.pop(); renderProgram(); };
+$('clear').onclick = () => { program = []; renderProgram(); setBanner(''); if (level) loadLevel(level, 1); };
+$('run').onclick = async () => {
+  if (!level || !program.length || animating) return;
+  await fetch('/api/run', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ level_id: level.id, commands: program, source: 'manual' }) });
+};
+$('source').onclick = () => { if (!manual) { setSource('manual'); toast('manual control'); } };
+fetch('/api/players').then(r => r.json()).then(({ players, default: def }) => {
+  const sel = $('aiModel');
+  if (!players.length) { const o = document.createElement('option'); o.value = ''; o.textContent = 'no AI configured (set ISLAND_MODEL in .env)'; sel.appendChild(o); $('aiPlay').disabled = true; return; }
+  for (const p of players) { const o = document.createElement('option'); o.value = p.id; o.textContent = p.label; sel.appendChild(o); }
+  sel.value = def;
+});
+$('aiPlay').onclick = async () => {
+  if (!level || animating) return;
+  $('aiPlay').disabled = true;
+  const r = await fetch('/api/agent_play', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ level_id: level.id, player: $('aiModel').value }) });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); toast(e.error || 'could not start'); }
+  setTimeout(() => { $('aiPlay').disabled = false; }, 3000);
+};
+$('speed').oninput = (e) => { speed = parseFloat(e.target.value); $('speedv').textContent = speed + '×'; };
+$('level').onchange = async (e) => {
+  setSource('manual');
+  const r = await fetch('/api/levels/' + e.target.value).then(r => r.json());
+  program = []; renderProgram(); $('thought').textContent = ''; loadLevel(r.level, 1);
+};
+
+// initial levels
+fetch('/api/levels').then(r => r.json()).then(list => {
+  const sel = $('level');
+  for (const lv of list) { const o = document.createElement('option'); o.value = lv.id; o.textContent = `${lv.id}. ${lv.name}`; sel.appendChild(o); }
+  if (!level) { loadLevel(list[1] || list[0], 1); renderProgram(); }
+  if ([...sel.options].some(o => o.value === level.id)) sel.value = level.id;
+});
+</script>
+</body>
+</html>

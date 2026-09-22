@@ -1,0 +1,34 @@
+[project]
+name = "islandgame"
+version = "0.1.0"
+description = "Island Hopper: a Swift-Playgrounds-style puzzle game that an LLM agent learns to play. MCP server + Three.js renderer."
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.2",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "httpx>=0.27",
+    "pydantic>=2",
+    "weave>=0.53.9",
+    "openai>=3.16.2",
+    "wandb>=0.30.0",
+    "openpipe-art>=0.5.18",
+    "pyarrow>=25.0.1",
+    "numpy>=2.4.6",
+    "pandas>=3.0.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+island-mcp = "islandgame.mcp_server:main"
+island-web = "islandgame.web_server:main"
+island-play = "islandgame.agent:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["islandgame"]

@@ -1,0 +1,21 @@
+# python / env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# local tool state (Claude Code permissions, macOS)
+.claude/settings.local.json
+.DS_Store
+
+# experiment artifacts: contain local paths, hostnames, and W&B account info
+wandb/
+.art/
+train/logs/
+*.log
+
+# generated SFT data (rebuild with train/sft_warmstart.py)
+train/data/
+
+# account settings (copy .env.example)
+.env

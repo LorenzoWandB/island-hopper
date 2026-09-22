@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "island-hopper": {
+      "command": "uv",
+      "args": [
+        "run",
+        "island-mcp"
+      ],
+      "env": {
+        "ISLAND_RENDERER_URL": "http://127.0.0.1:8765"
+      }
+    },
+    "wandb": {
+      "type": "http",
+      "url": "https://mcp.withwandb.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${WANDB_API_KEY}"
+      }
+    }
+  }
+}
